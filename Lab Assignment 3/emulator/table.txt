@@ -1,4 +1,0 @@
-follis.cs.wisc.edu 3000 follis.cs.wisc.edu 4000 follis.cs.wisc.edu 4000 0 0
-follis.cs.wisc.edu 3000 royal-06.cs.wisc.edu 5002 royal-06.cs.wisc.edu 40000 0 0
-follis.cs.wisc.edu 3000 follis.cs.wisc.edu 5000 follis.cs.wisc.edu 5000 0 0
-follis.cs.wisc.edu 3000 royal-06.cs.wisc.edu 3002 royal-06.cs.wisc.edu 40000 0 0
