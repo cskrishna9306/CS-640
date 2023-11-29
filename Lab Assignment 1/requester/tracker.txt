@@ -1,0 +1,7 @@
+hello.txt 1 mumble-x 5000
+split.txt 2 follis.cs.wisc.edu 5002
+split.txt 3 follis.cs.wisc.edu 5003
+split.txt 1 follis.cs.wisc.edu 5000
+sai.txt 3 royal-01.cs.wisc.edu 15321
+sai.txt 2 royal-01.cs.wisc.edu 19456
+sai.txt 1 royal-01.cs.wisc.edu 32678
