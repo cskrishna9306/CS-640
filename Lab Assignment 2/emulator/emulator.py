@@ -3,13 +3,10 @@ import queue
 import socket
 import struct
 from datetime import datetime
-import time
-
-
-def forwardPacket():
-    pass
-
-
+import random
+import ipaddress
+import select
+import logging
 
 # Get the command line arguments
 opts, _ = getopt.getopt(sys.argv[1:],"p:q:f:l:")
@@ -17,117 +14,117 @@ opts = dict(opts)
 
 port, queue_size, file_name, log = int(opts['-p']), int(opts['-q']), opts['-f'], opts['-l']
 
-# Setting up priority queues
-high_priority = queue.Queue()
-medium_priority = queue.Queue()
-low_priority = queue.Queue()
+if not 2049 < port < 65536:
+    print("Error: Port number not between the range 2049 and 65536")
+    exit(1)
 
-# priority_queues = {1: queue.Queue(), 2: queue.Queue(), 3: queue.Queue()}
-# priority_queue = {priority: queue.Queue(maxsize = queue_size) for priority in ["high", "medium", "low"]}
+# Initializing the priority queues
 priority_queues = [queue.Queue(maxsize = queue_size) for i in range(3)]
+
+# Opening log file
+logging.basicConfig(filename=log, level=logging.ERROR, encoding='utf-8', filemode='w', format='%(message)s')
 
 # Binding the socket at the specified port number
 socket_object = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 socket_object.bind((socket.gethostbyname(socket.gethostname()), port))
 
+# Set the socket to non-blocking mode
+socket_object.setblocking(0)
+
 # Static Forwarding Table
 forwarding_table = dict()
-# Filter the file for the current emulator
+
+# Constructing the forwarding table
 with open(file_name) as f:
     for line in f:
        file = line.strip().split(" ")
-    #    print(socket.gethostbyname(socket.gethostname()))
        if (socket.gethostbyname(file[0]), int(file[1])) == (socket.gethostbyname(socket.gethostname()), port):
-           # Not sure if there may exist multiple entries for the same destination, but different next hop
-           # can turn the value field into a dict
            forwarding_table[(socket.gethostbyname(file[2]), int(file[3]))] = {"next_hop": (file[4], int(file[5])), "delay": int(file[6]), "loss_prob": int(file[7])}
-        #   mumble-03 and mumble-04 mapped to the same ip address
-        #    print(socket.gethostbyaddr(socket.gethostbyname("follis")))
 
-print(forwarding_table)
+delay_in_progress = False
+forwarding_packet = None
+recv_time = 0
 
-# Receving packets
+# Receving and Forwarding packets
 while True:
-    full_packet, sender_address = socket_object.recvfrom(1024)
-    recv_time = datetime.now()
-
-    if not full_packet:
-        packet_header = full_packet[:17]
+    ready_to_read, _, _ = select.select([socket_object], [], [], 0)
     
-        # TODO: Unpack the contents of the packet header
-        packet_header = struct.unpack("!bII", packet_header)
+    if ready_to_read:
+        full_packet, _ = socket_object.recvfrom(1024)
+        # Unpacking the contents of the packet header
+        packet_header = struct.unpack("!BIHIHIcII", full_packet[:26])
     
-        priority = packet_header[0].decode()
-        dest_ip_address = packet_header[3].decode()
-        dest_port = packet_header[4].decode()
-      
-        payload = full_packet[17:].decode()
+        priority = packet_header[0]
+        
+        src_ip_address = str(ipaddress.ip_address(int(packet_header[1])))
+        src_port = packet_header[2]
+        
+        dest_ip_address = str(ipaddress.ip_address(int(packet_header[3])))
+        dest_port = packet_header[4]
+        
+        payload_size = packet_header[5] - 9
+        packet_type = packet_header[6].decode()
 
+        # Logging packet loss: No match in forwarding table
         if (dest_ip_address, dest_port) not in forwarding_table:
-            # TODO: Log the packet loss
+            logging.error(f"{datetime.now().strftime('%m/%d/%Y %H:%M:%S.%f')[:-3]} - ERROR - Destination address not found in forwarding table \n\tSource: {socket.gethostbyaddr(src_ip_address)[0]}:{src_port} \n\tDestination: {socket.gethostbyaddr(dest_ip_address)[0]}:{dest_port} \n\tPriority: {priority} \n\tPayload Size: {payload_size} \n")
             continue
 
-        # Placing the packets in their respective priority queues
-        if not priority_queues[priority - 1].maxsize():
-            priority_queues[priority - 1].put((full_packet, recv_time))
-        else:
-            # TODO: Log the packet loss
-            pass
+        if priority_queues[priority - 1].full():
+            if packet_type != "E":  # Logging packet loss: Queue is full
+                logging.error(f"{datetime.now().strftime('%m/%d/%Y %H:%M:%S.%f')[:-3]} - ERROR - Priority queue is full \n\tSource: {socket.gethostbyaddr(src_ip_address)[0]}:{src_port} \n\tDestination: {socket.gethostbyaddr(dest_ip_address)[0]}:{dest_port} \n\tPriority: {priority} \n\tPayload Size: {payload_size} \n")
+            else:   # Forwarding END packets directly if the queue is full
+                socket_object.sendto(full_packet, forwarding_table[(dest_ip_address, dest_port)]["next_hop"])
+        else:   # Placing the packets in their respective priority queues
+            priority_queues[priority - 1].put(full_packet)
+            
+    # Pulling a packet from the priority queues if no packet is being delayed
+    if not delay_in_progress:
+        forwarding_packet = None
+        recv_time = 0
+        for i in range(3):  # Choosing the highest priority packet to forward
+            if not priority_queues[i].empty():
+                forwarding_packet = priority_queues[i].get()
+                recv_time = datetime.now().timestamp()
 
-
-    # When talking about delay, do i keep checking if the delay time has elapsed for the packet without putting it to sleep
-    # Because wouldn't using time.sleep function delay recvfro function, or is that ok
-
-
-    # Note: Should forwarding take place asynchronously
-    # Forwarding packets
-    # Choose the packet from the queues
-    forwarding_packet = None
-    # if priority_queues[0].not_empty():
-    #     forwarding_packet = priority_queues[0].get()
-    # elif priority_queues[1].not_empty():
-    #     forwarding_packet = priority_queues.get()
-    # elif priority_queues[2].not_empty():
-    #     forwarding_packet = priority_queues.get()
-
-    # forwarding_packet = priority_queues[i].get() if priority_queues[i].not_empty() for i in range(3)
-    # TODO: Maintain check for delayed packets and only pull packets when nothing is being delayed
-    for i in range(3):
-        if priority_queues[i].not_empty():
-            forwarding_packet, recv_time = priority_queues[i].get()
-            # TODO: recv_time should be the time from when i pull the packet from the queue
-            break
-
-    forwarding_packet_header = forwarding_packet[:17]
+                # Unpacking the header of the forwarding packet
+                forwarding_packet_header = struct.unpack("!BIHIHIcII", forwarding_packet[:26])
+                
+                forwarding_priority = forwarding_packet_header[0]
+                
+                forwarding_src_ip_address = str(ipaddress.ip_address(int(forwarding_packet_header[1])))
+                forwarding_src_port = forwarding_packet_header[2]
+                
+                forwarding_dest_ip_address = str(ipaddress.ip_address(int(forwarding_packet_header[3])))
+                forwarding_dest_port = forwarding_packet_header[4]
+                
+                forwarding_payload_size = forwarding_packet_header[5] - 9
+                forwarding_packet_type = forwarding_packet_header[6].decode()
+                
+                delay_in_progress = True
+                break
     
-    # TODO: Unpack the contents of the packet header
-    forwarding_packet_header = struct.unpack("!bII", forwarding_packet_header)
-    
-    dest_ip_address = forwarding_packet_header[3].decode()
-    dest_port = forwarding_packet_header[4].decode()
-    
-    delay = forwarding_table[(dest_ip_address, dest_port)]["delay"]
-    loss_prob = forwarding_table[(dest_ip_address, dest_port)]["loss_prob"]
-    
-    if datetime.now() - recv_time < delay:
-        time.sleep((delay - (datetime.now() - recv_time)) / 1000)
-    # TODO: DO NOT SLEEP and just wait for the delay time to eventually pass
+    # Continue if the priority queues are empty
+    if not forwarding_packet:
+        delay_in_progress = False
+        continue
 
-    # TODO: Perform the loss_prob and choose whether to send it or not
-    # can i choose a random number  between 1 to 100 and if it is below the loss_prob i drop it
+    # Delaying the packet
+    if (datetime.now().timestamp() - recv_time) * 1000 < forwarding_table[(forwarding_dest_ip_address, forwarding_dest_port)]["delay"]:
+        delay_in_progress = True
+        continue
 
-    # TODO: Log the packet loss if loss_prob is true
-    # TODO: Skip the loss_prob if the packet is an END packet
+    # No Delay: Packet will be either dropped or sent
+    delay_in_progress = False
+    
+    # Skipping the loss probability calculation if the packet is an END packet
+    if forwarding_packet_type != "E":
+        # Performing the loss probability calculation
+        if random.randint(1, 100) <= forwarding_table[(forwarding_dest_ip_address, forwarding_dest_port)]["loss_prob"]:
+            logging.error(f"{datetime.now().strftime('%m/%d/%Y %H:%M:%S.%f')[:-3]} - ERROR - Random loss probability \n\tSource: {socket.gethostbyaddr(forwarding_src_ip_address)[0]}:{forwarding_src_port} \n\tDestination: {socket.gethostbyaddr(forwarding_dest_ip_address)[0]}:{forwarding_dest_port} \n\tPriority: {forwarding_priority} \n\tPayload Size: {forwarding_payload_size} \n")
+            continue
+
     # Sending the packet
-    socket_object.sendto(forwarding_packet, forwarding_table[(dest_ip_address, dest_port)]["next_hop"])
-
-
-    
-    
-
-
-
-    
-
+    socket_object.sendto(forwarding_packet, forwarding_table[(forwarding_dest_ip_address, forwarding_dest_port)]["next_hop"])
 
     
