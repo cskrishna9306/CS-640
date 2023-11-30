@@ -6,8 +6,14 @@ import ipaddress
 import select
 import logging
 
-def readTopology():
-    pass
+def readTopology(file_name):
+    topology = {}
+    with open(file_name) as f:
+        for line in f:
+            links = line.strip().split(" ")
+            topology[(links[0].split(",")[0], int(links[0].split(",")[1]))] = [(ip_addr, int(port)) for ip_addr, port in (link.split(",") for link in links[1:])]
+    
+    return topology
 
 def createRoutes():
     pass
@@ -36,17 +42,18 @@ socket_object.bind((socket.gethostbyname(socket.gethostname()), port))
 # Set the socket to non-blocking mode
 socket_object.setblocking(0)
 
+# Reading the topology within the specified file
+topology = readTopology(file_name)
+print(topology)
 # Static Forwarding Table
-forwarding_table = dict()
+forwarding_table = {}
 
 # Constructing the forwarding table
 with open(file_name) as f:
     for line in f:
        file = line.strip().split(" ")
        if (socket.gethostbyname(file[0]), int(file[1])) == (socket.gethostbyname(socket.gethostname()), port):
-           forwarding_table[(socket.gethostbyname(file[2]), int(file[3]))] = {"next_hop": (file[4], int(file[5])), "delay": int(file[6]), "loss_prob": int(file[7])}
-
-forwarding_packet = None
+           forwarding_table[(socket.gethostbyname(file[2]), int(file[3]))] = {"next_hop": (file[4], int(file[5]))}
 
 # Receving and Forwarding packets
 while True:
@@ -68,6 +75,8 @@ while True:
         payload_size = packet_header[5] - 9
         packet_type = packet_header[6].decode()
 
+        # TODO: Receiving helloMessage and LinkStateMessage
+        
         # Logging packet loss: No match in forwarding table
         if (dest_ip_address, dest_port) not in forwarding_table:
             logging.error(f"{datetime.now().strftime('%m/%d/%Y %H:%M:%S.%f')[:-3]} - ERROR - Destination address not found in forwarding table \n\tSource: {socket.gethostbyaddr(src_ip_address)[0]}:{src_port} \n\tDestination: {socket.gethostbyaddr(dest_ip_address)[0]}:{dest_port} \n\tPriority: {priority} \n\tPayload Size: {payload_size} \n")
@@ -76,4 +85,8 @@ while True:
         # Sending the packet to its next hop
         socket_object.sendto(full_packet, forwarding_table[(dest_ip_address, dest_port)]["next_hop"])
 
+    # TODO: Sending helloMessage to neighbors after certain interval
+    
+    # TODO: Check for helloMessages from neighbors
+    # TODO: If no receipt of helloMessage remove from topology
     
