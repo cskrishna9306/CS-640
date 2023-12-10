@@ -20,6 +20,8 @@ socket_object.bind((socket.gethostbyname(socket.gethostname()), port))
 # Initialize TTL
 TTL = 0
 
+print("Hop #\tIP\tPort")
+
 while True:
     # Building the route trace packet
     #   a. TTL = 0
@@ -38,7 +40,7 @@ while True:
         print("Destination Address:\t\t{}:{}".format(socket.gethostbyname(dest_hostname), dest_port))
     
     # Waiting for a response
-    response_packet, response_address = socket_object.recvfrom(1024)
+    response_packet, _ = socket_object.recvfrom(1024)
  
     # Unpacking the contents of the response packet header
     packet_header = struct.unpack("!BIHIHIcII", response_packet[:26])
@@ -52,7 +54,7 @@ while True:
     packet_dest_port = packet_header[4]
 
     # Printing the responder's IP and port
-    print("Responder's Address: {}:{}".format(response_address[0], response_address[1]))
+    print("{}\t{}\t{}".format(TTL + 1, packet_src_ip_address, packet_src_port))
 
     # Printing response packet debug information
     if debug == 1:
