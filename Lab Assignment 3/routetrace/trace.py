@@ -20,7 +20,7 @@ socket_object.bind((socket.gethostbyname(socket.gethostname()), port))
 # Initialize TTL
 TTL = 0
 
-print("Hop #\tIP\tPort")
+print("Hop #\tIP\t\tPort")
 
 while True:
     # Building the route trace packet
@@ -28,7 +28,7 @@ while True:
     #   b. (Source IP, Source Port) = (Route Trace IP, Route Trace Port)
     #   c. (Destination IP, Destination Port) = (Destination IP, Destination Port)
     #   d. Route trace packets have the packet type "T"
-    routeTrace = struct.pack("!BIHIHIcII", TTL, int(ipaddress.ip_address(socket.gethostbyname(socket.gethostname()))), port, int(ipaddress.ip_address(dest_hostname)), dest_port, 9, bytes("T", "utf-8"), 0, 0)
+    routeTrace = struct.pack("!BIHIHIcII", TTL, int(ipaddress.ip_address(socket.gethostbyname(socket.gethostname()))), port, int(ipaddress.ip_address(socket.gethostbyname(dest_hostname))), dest_port, 9, bytes("T", "utf-8"), 0, 0)
 
     # Sending the route trace packet to the source node
     socket_object.sendto(routeTrace, (socket.gethostbyname(src_hostname), src_port))
@@ -44,8 +44,6 @@ while True:
  
     # Unpacking the contents of the response packet header
     packet_header = struct.unpack("!BIHIHIcII", response_packet[:26])
-        
-    packet_TTL = packet_header[0]
     
     packet_src_ip_address = str(ipaddress.ip_address(int(packet_header[1])))
     packet_src_port = packet_header[2]
@@ -58,7 +56,7 @@ while True:
 
     # Printing response packet debug information
     if debug == 1:
-        print("TTL:\t\t{}".format(packet_TTL))
+        print("TTL:\t\t{}".format(TTL))
         print("Source Address:\t\t{}:{}".format(packet_src_ip_address, packet_src_port))
         print("Destination Address:\t\t{}:{}".format(packet_dest_ip_address, packet_dest_port))
 
