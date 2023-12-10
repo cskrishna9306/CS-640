@@ -4,6 +4,7 @@ import struct
 from datetime import datetime
 import ipaddress
 import select
+import pickle
 
 def readTopology(file_name):
     topology = {}
@@ -67,8 +68,9 @@ socket_object.setblocking(0)
 topology = readTopology(file_name)
 
 # Static Forwarding Table (Destination, Next Hop)
-# forwarding_table = buildForwardTable((socket.gethostbyname(socket.gethostname()), port), topology)
-forwarding_table = buildForwardTable(("1.0.0.0", 1), topology)
+forwarding_table = buildForwardTable((socket.gethostbyname(socket.gethostname()), port), topology)
+# forwarding_table = buildForwardTable(("1.0.0.0", 1), topology)
+print("Initial forwarding table:")
 print(forwarding_table)
 # Latest timestamps from neighbors
 neighbors = {neighbor: 0 for neighbor in topology[(socket.gethostbyname(socket.gethostname()), port)]}
@@ -78,18 +80,20 @@ largest_seq_no = {}
 
 seq_no = 1      # Initializing sequence number
 TTL = 10        # Initializing TTL
-LSP_INTERVAL = 1000 # Initializing defined interval for linkStateMessage
+LSP_INTERVAL = 4000 # Initializing defined interval for linkStateMessage
 HM_INTERVAL = 500   # Initializing interval for helloMessage
-last_message = 0
+last_LSP = 0
+last_HM = 0
 
 # helloMessage = struct.pack("!BIHIHIcII", TTL, int(ipaddress.ip_address(socket.gethostbyname(socket.gethostname()))), port, int(ipaddress.ip_address(src_ip_address)), src_port, 9, bytes("H", "utf-8"), 0, 0)
 # TODO: LinkStateMessage contains a list of all directly connected neighbors to this emulator
-linkStateMessage = neighbors.keys()
+LSM_body = str(list(neighbors.keys()))
 
 # Receving and Forwarding packets
 while True:
     ready_to_read, _, _ = select.select([socket_object], [], [], 0)
-    
+    print("TOPOLOGY:")
+    print(topology)
     if ready_to_read:
         full_packet, neighbor_address = socket_object.recvfrom(1024)
         # Unpacking the contents of the packet header
@@ -116,28 +120,52 @@ while True:
                 forwarding_table = buildForwardTable((socket.gethostbyname(socket.gethostname()), port), topology)
                 # Incrementing sequence number
                 seq_no += 1
+                # print("UPDATE:")
+                # print(forwarding_table)
             
             # Updating the latest timestamp for the neighbor
             neighbors[neighbor_address] = datetime.now().timestamp()
             # Generating a new LinkStateMessage
-            linkStateMessage = neighbors.keys()
+            LSM_body = str(list(neighbors.keys()))
             continue
         
         # Handle Link State Message
         if packet_type == "L":
-            # Check for an update
-            if largest_seq_no[(src_ip_address, src_port)] < packet_seq_no:
+            if (src_ip_address, src_port) in largest_seq_no:
+                # Check for an update
+                if largest_seq_no[(src_ip_address, src_port)] < packet_seq_no:
+                    # Updating route topology
+                    topology[(src_ip_address, src_port)] = eval(full_packet[26:].decode())
+                
+                    # Updating the forwarding table
+                    forwarding_table = buildForwardTable(((socket.gethostbyname(socket.gethostname()), port)), topology)
+                    # print("UPDATE:")
+                    # print(forwarding_table)
+                    # Forwarding packets via reliable flooding
+                    # forwardPacket(socket_object, full_packet, neighbors.keys().remove(neighbor_address))
+                
+                    for neighbor in neighbors.keys():
+                        if neighbor is not neighbor_address:
+                            newPacket = struct.pack("!BIHIHIcII", packet_TTL - 1, int(ipaddress.ip_address(src_ip_address)), src_port, int(ipaddress.ip_address(dest_ip_address)), dest_port, 0, bytes("L", "utf-8"), packet_seq_no, 0) + full_packet[26:]
+                            socket_object.sendto(newPacket, neighbor)
+            else:
                 # Updating route topology
-                topology[(src_ip_address, port)] = full_packet[26:].decode()
+                    topology[(src_ip_address, src_port)] = eval(full_packet[26:].decode())
                 
-                # Updating the forwarding table
-                forwarding_table = buildForwardTable(((socket.gethostbyname(socket.gethostname()), port)), topology)
+                    # Updating the forwarding table
+                    forwarding_table = buildForwardTable(((socket.gethostbyname(socket.gethostname()), port)), topology)
+                    # print("UPDATE:")
+                    # print(forwarding_table)
+                    # Forwarding packets via reliable flooding
+                    # forwardPacket(socket_object, full_packet, neighbors.keys().remove(neighbor_address))
                 
-                # Forwarding packets via reliable flooding
-                forwardPacket(socket_object, full_packet, neighbors.keys().remove(neighbor_address))
-                
-                # Updating the largest sequence number from this source node
-                largest_seq_no[(src_ip_address, src_port)] = packet_seq_no
+                    for neighbor in neighbors.keys():
+                        if neighbor is not neighbor_address:
+                            newPacket = struct.pack("!BIHIHIcII", packet_TTL - 1, int(ipaddress.ip_address(src_ip_address)), src_port, int(ipaddress.ip_address(dest_ip_address)), dest_port, 0, bytes("L", "utf-8"), packet_seq_no, 0) + full_packet[26:]
+                            socket_object.sendto(newPacket, neighbor)
+            
+            # Updating the largest sequence number from this source node
+            largest_seq_no[(src_ip_address, src_port)] = packet_seq_no
             continue
 
         # Handle Data, End, and Request packets
@@ -158,18 +186,20 @@ while True:
             continue
 
     # TODO: Step 3: Sending helloMessage to neighbors after certain interval
-    if (datetime.now().timestamp() - last_message) > HM_INTERVAL:
+    if (datetime.now().timestamp() - last_HM) * 1000 > HM_INTERVAL:
         for neighbor in neighbors:
             # TODO: Sending hello message to every neighbor
             helloMessage = struct.pack("!BIHIHIcII", TTL, int(ipaddress.ip_address(socket.gethostbyname(socket.gethostname()))), port, int(ipaddress.ip_address(neighbor[0])), neighbor[1], 9, bytes("H", "utf-8"), 0, 0)
             socket_object.sendto(helloMessage, neighbor)
+        last_HM = datetime.now().timestamp()
 
     # TODO: Step 4: Check for helloMessages from neighbors
     neighbors_rm = []
     for neighbor in neighbors:
         # TODO: Check for the timestamp and remove from topology
-        if (datetime.now().timestamp() - neighbors[neighbor]) > HM_INTERVAL:
-            topology[(socket.gethostbyname(socket.gethostname()), port)].remove(neighbor)
+        if (datetime.now().timestamp() - neighbors[neighbor]) * 1000 > HM_INTERVAL:
+            if neighbor in topology[(socket.gethostbyname(socket.gethostname()), port)]:
+                topology[(socket.gethostbyname(socket.gethostname()), port)].remove(neighbor)
             neighbors_rm.append(neighbor)
             seq_no += 1
     
@@ -177,9 +207,12 @@ while True:
     forwarding_table = buildForwardTable((socket.gethostbyname(socket.gethostname()), port), topology)
     for neighbor in neighbors_rm:
         del neighbors[neighbor]
+        # largest_seq_no.pop(neighbor)
         
-    # TODO: Step 5: Genereate new LinkStateMessage to all neighbors
-    linkStateMessage = neighbors.keys()
-    if (datetime.now().timestamp() - last_message) > LSP_INTERVAL:
+    # Sending new LinkStateMessage to all neighbors after certain interval
+    LSM_body = str(list(neighbors.keys()))
+    if (datetime.now().timestamp() - last_LSP) * 1000 > LSP_INTERVAL:
         for neighbor in neighbors:
-            pass
+            linkStateMessage = struct.pack("!BIHIHIcII", TTL, int(ipaddress.ip_address(socket.gethostbyname(socket.gethostname()))), port, int(ipaddress.ip_address(neighbor[0])), neighbor[1], 9 + len(LSM_body), bytes("L", "utf-8"), seq_no, len(LSM_body)) + LSM_body.encode()
+            socket_object.sendto(linkStateMessage, neighbor)
+        last_LSP = datetime.now().timestamp()
