@@ -34,7 +34,7 @@ if __name__ == "__main__":
    opts, _ = getopt.getopt(sys.argv[1:],"p:g:r:q:l:f:e:i:t:")
    opts = dict(opts)
 
-   port, requester_port, rate, seq_no, length, f_hostname, f_port, priority, timeout = int(opts['-p']), int(opts['-g']), int(opts['-r']), int(opts['-q']), int(opts['-l']), opts['-f'], int(opts['-e']), int(opts['-i']), int(opts['-t'])
+   port, requester_port, rate, seq_no, length, f_hostname, f_port, TTL, timeout = int(opts['-p']), int(opts['-g']), int(opts['-r']), int(opts['-q']), int(opts['-l']), opts['-f'], int(opts['-e']), int(opts['-i']), int(opts['-t'])
    
    if (not 2049 < port < 65536) or (not 2049 < requester_port < 65536):
       print("Error: Port number not between the range 2049 and 65536")
@@ -86,7 +86,7 @@ if __name__ == "__main__":
          # Adding packets to a window buffer when window buffer is empty
          if len(window_buffer) < window and not sending:
             # Building the DATA packet
-            packet = struct.pack("!BIHIHIcII", priority, int(ipaddress.ip_address(socket.gethostbyname(socket.gethostname()))), port, int(ipaddress.ip_address(src_ip_address)), src_port, 9 + len(byte), bytes("D", "utf-8"), socket.htonl(seq_no), len(byte)) + byte
+            packet = struct.pack("!BIHIHIcII", TTL, int(ipaddress.ip_address(socket.gethostbyname(socket.gethostname()))), port, int(ipaddress.ip_address(src_ip_address)), src_port, 9 + len(byte), bytes("D", "utf-8"), socket.htonl(seq_no), len(byte)) + byte
             # Adding the DATA packet to the window buffer
             window_buffer[seq_no] = [packet, 0, 5]
             # Incementing the sequence number
@@ -141,7 +141,7 @@ if __name__ == "__main__":
             sending = False   # Indicator to start building the window
 
    # Building the END packet
-   packet = struct.pack("!BIHIHIcII", priority, int(ipaddress.ip_address(socket.gethostbyname(socket.gethostname()))), port, int(ipaddress.ip_address(src_ip_address)), src_port, 9, bytes("E", "utf-8"), socket.htonl(seq_no), 0) + "".encode()
+   packet = struct.pack("!BIHIHIcII", TTL, int(ipaddress.ip_address(socket.gethostbyname(socket.gethostname()))), port, int(ipaddress.ip_address(src_ip_address)), src_port, 9, bytes("E", "utf-8"), socket.htonl(seq_no), 0) + "".encode()
 
    # Managing the rate of the END packet sent
    sleep(prev_time, rate)

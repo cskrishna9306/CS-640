@@ -40,7 +40,7 @@ if __name__ == "__main__":
       senders[(socket.gethostbyname(sender[1]), sender[2])] = {}
 
       # Building the REQUEST packet
-      packet = struct.pack("!BIHIHIcII", 1, int(ipaddress.ip_address(socket.gethostbyname(socket.gethostname()))), port, int(ipaddress.ip_address(socket.gethostbyname(sender[1]))), sender[2], 9 + len(file_name.encode()), bytes("R", "utf-8"), 0, window) + file_name.encode()
+      packet = struct.pack("!BIHIHIcII", 30, int(ipaddress.ip_address(socket.gethostbyname(socket.gethostname()))), port, int(ipaddress.ip_address(socket.gethostbyname(sender[1]))), sender[2], 9 + len(file_name.encode()), bytes("R", "utf-8"), 0, window) + file_name.encode()
       # Sending the REQUEST packet
       socket_object.sendto(packet, (socket.gethostbyname(f_hostname), f_port))
 
@@ -68,7 +68,7 @@ if __name__ == "__main__":
          continue
 
       # Building the ACK packet
-      ack_packet = struct.pack("!BIHIHIcII", 1, int(ipaddress.ip_address(socket.gethostbyname(socket.gethostname()))), port, int(ipaddress.ip_address(src_ip_address)), src_port, 9, bytes("A", "utf-8"), socket.htonl(seq_no), 0) + "".encode()
+      ack_packet = struct.pack("!BIHIHIcII", 30, int(ipaddress.ip_address(socket.gethostbyname(socket.gethostname()))), port, int(ipaddress.ip_address(src_ip_address)), src_port, 9, bytes("A", "utf-8"), socket.htonl(seq_no), 0) + "".encode()
       # Sending the ACK packet
       socket_object.sendto(ack_packet, (socket.gethostbyname(f_hostname), f_port))
       
