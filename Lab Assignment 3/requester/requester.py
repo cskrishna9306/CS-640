@@ -66,17 +66,17 @@ if __name__ == "__main__":
       # Check if the packet's destination address matches
       if (dest_ip_address, dest_port) != (socket.gethostbyname(socket.gethostname()), port):
          continue
-
-      # Building the ACK packet
-      ack_packet = struct.pack("!BIHIHIcII", 30, int(ipaddress.ip_address(socket.gethostbyname(socket.gethostname()))), port, int(ipaddress.ip_address(src_ip_address)), src_port, 9, bytes("A", "utf-8"), socket.htonl(seq_no), 0) + "".encode()
-      # Sending the ACK packet
-      socket_object.sendto(ack_packet, (socket.gethostbyname(f_hostname), f_port))
       
+      # Igoring hello messages, link state messages, and route trace packets
       if packet_type == "D":
+         # Building the ACK packet
+         ack_packet = struct.pack("!BIHIHIcII", 30, int(ipaddress.ip_address(socket.gethostbyname(socket.gethostname()))), port, int(ipaddress.ip_address(src_ip_address)), src_port, 9, bytes("A", "utf-8"), socket.htonl(seq_no), 0) + "".encode()
+         # Sending the ACK packet
+         socket_object.sendto(ack_packet, (socket.gethostbyname(f_hostname), f_port))
          # Avoiding duplicate packets
          if seq_no not in senders[(src_ip_address, src_port)]:
             senders[(src_ip_address, src_port)][seq_no] = [recv_time, length, payload]
-      else:
+      elif packet_type == "E":
          file_chunks -= 1
          
          # Printing END packet details

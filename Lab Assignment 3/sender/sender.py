@@ -19,13 +19,6 @@ def sendPacket(socket_object, packet, f_hostname, f_port, transmissions):
    socket_object.sendto(packet, (socket.gethostbyname(f_hostname), f_port))
    send_time = datetime.now()
    
-   # # Printing the metadata of the packet
-   # print("{} Packet".format(packet_type))
-   # print("send time:\t{}".format(send_time.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]))
-   # print("requester addr:\t{}:{}".format(src_ip_address, src_port))
-   # print("Sequence num:\t{}".format(seq_no))
-   # print("payload:\t{}\n".format(packet[:4].decode()))
-   
    return send_time.timestamp(), send_time.timestamp(), transmissions + 1
 
 
@@ -129,13 +122,19 @@ if __name__ == "__main__":
                
                if ready_to_read:
                   # Receiving the ACK packets
-                  ack_packet, _ = socket_object.recvfrom(1024)
+                  recv_packet, _ = socket_object.recvfrom(1024)
                
+                  # Unpacking the contents of the packet header
+                  packet_header = struct.unpack("!BIHIHIcII", recv_packet[:26])
+
+                  # Unpacking packet type
+                  packet_type = packet_header[6].decode()
                   # Unpacking the sequence number from the ACK packet header
-                  sn = socket.ntohl(struct.unpack("!BIHIHIcII", ack_packet[:26])[7])
+                  sn = socket.ntohl(packet_header[7])
 
                   # Removing ACK'd packets from the window
-                  if sn in window_buffer:     
+                  #  - Ignoring hello messages, linkStateMessages, and route trace packets
+                  if packet_type == "A" and sn in window_buffer:     
                      del window_buffer[sn]
               
             sending = False   # Indicator to start building the window
