@@ -171,12 +171,10 @@ def forwardPacket(socket_object, full_packet, seq_no, neighbors, largest_seq_no,
     
     return seq_no, neighbors, largest_seq_no, topology, forwarding_table
 
-def buildForwardTable(start_vertex, topology):
+def buildForwardTable(next, topology):
 
-    confirmed = {start_vertex: {"Cost": 0, "NextHop": None}}
+    confirmed = {next: {"Cost": 0, "NextHop": None}}
     tentative = {}
-
-    next = start_vertex
 
     while True:
         # Traversing each neighbor
@@ -230,4 +228,5 @@ if __name__ == "__main__":
     # Set the socket to non-blocking mode
     socket_object.setblocking(0)
 
+    # Handling link-state routing protocol
     createRoutes(socket_object, port, file_name)
