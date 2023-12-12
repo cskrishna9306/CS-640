@@ -38,6 +38,9 @@ if __name__ == "__main__":
    socket_object.bind((socket.gethostbyname(socket.gethostname()), port))
    socket_object.setblocking(0)
    
+   HM_INTERVAL = 10  # Initializing interval for helloMessage
+   last_HM = 0       # Latest timestamp for helloMessage
+   
    while True:
       # Setting up non-blocking
       ready_to_read, _, _ = select.select([socket_object], [], [], 0)
@@ -138,6 +141,15 @@ if __name__ == "__main__":
                      del window_buffer[sn]
               
             sending = False   # Indicator to start building the window
+
+            # Sending helloMessage to (f_hostname, f_port) after certain interval
+            if (datetime.now().timestamp() - last_HM) * 1000 > HM_INTERVAL:
+               # Sending hello message
+               helloMessage = struct.pack("!BIHIHIcII", TTL, int(ipaddress.ip_address(socket.gethostbyname(socket.gethostname()))), port, int(ipaddress.ip_address(socket.gethostbyname(f_hostname))), f_port, 9, bytes("H", "utf-8"), 0, 0)
+               socket_object.sendto(helloMessage, (socket.gethostbyname(f_hostname), f_port))
+            
+               # Updating the timestamp for the latest helloMessage
+               last_HM = datetime.now().timestamp()
 
    # Building the END packet
    packet = struct.pack("!BIHIHIcII", TTL, int(ipaddress.ip_address(socket.gethostbyname(socket.gethostname()))), port, int(ipaddress.ip_address(src_ip_address)), src_port, 9, bytes("E", "utf-8"), socket.htonl(seq_no), 0) + "".encode()

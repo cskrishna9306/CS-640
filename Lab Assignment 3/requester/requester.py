@@ -30,6 +30,9 @@ if __name__ == "__main__":
    # Binding the socket at the specified port number
    socket_object = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
    socket_object.bind((socket.gethostbyname(socket.gethostname()), port))
+   
+   HM_INTERVAL = 10  # Initializing interval for helloMessage
+   last_HM = 0       # Latest timestamp for helloMessage
 
    # Maintain a hieararchy based on ID (using a prioriy queue heapq)
    senders = {}
@@ -96,6 +99,15 @@ if __name__ == "__main__":
          print("Total Data packets:\t{}".format(data_packets))
          print("Average packets/second:\t{}".format(round(data_packets / total_time)))
          print("Duration of the test:\t{} ms\n".format(int(total_time * 1000)))
+         
+      # Sending helloMessage to (f_hostname, f_port) after certain interval
+      if (datetime.now().timestamp() - last_HM) * 1000 > HM_INTERVAL:
+         # Sending hello message
+         helloMessage = struct.pack("!BIHIHIcII", 30, int(ipaddress.ip_address(socket.gethostbyname(socket.gethostname()))), port, int(ipaddress.ip_address(socket.gethostbyname(f_hostname))), f_port, 9, bytes("H", "utf-8"), 0, 0)
+         socket_object.sendto(helloMessage, (socket.gethostbyname(f_hostname), f_port))
+            
+         # Updating the timestamp for the latest helloMessage
+         last_HM = datetime.now().timestamp()
 
    # Building the file
    with open(file_name, "w") as f:
