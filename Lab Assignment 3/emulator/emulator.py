@@ -49,6 +49,18 @@ def buildForwardTable(start_vertex, topology):
     # Returning the forwarding table as a dictionary
     return {destination: confirmed[destination]["NextHop"] for destination in confirmed}
 
+def printUpdates(topology, forwarding_table):
+    # Printing information
+    print("Topology:")
+    print()
+    print(topology)
+    print()
+    print("Forwarding Table:")
+    print()
+    print(forwarding_table)
+    print()
+    return
+
 # Get the command line arguments
 opts, _ = getopt.getopt(sys.argv[1:],"p:f:")
 opts = dict(opts)
@@ -113,10 +125,10 @@ while True:
                     topology[(socket.gethostbyname(socket.gethostname()), port)].append((src_ip_address, src_port))
                     # Updating the forwarding table
                     forwarding_table = buildForwardTable((socket.gethostbyname(socket.gethostname()), port), topology)
+                    # Printing information
+                    printUpdates(topology, forwarding_table)
                     # Incrementing sequence number
                     seq_no += 1
-                    # print("UPDATE:")
-                    # print(forwarding_table)
             
                 # Updating the latest timestamp for the neighbor
                 neighbors[(src_ip_address, src_port)] = datetime.now().timestamp()
@@ -127,12 +139,11 @@ while True:
                     if largest_seq_no[(src_ip_address, src_port)] < packet_seq_no:
                         # Updating route topology
                         topology[(src_ip_address, src_port)] = eval(full_packet[26:].decode())
-                
                         # Updating the forwarding table
                         forwarding_table = buildForwardTable(((socket.gethostbyname(socket.gethostname()), port)), topology)
-                    
-                        # print("FORWARDING TABLE:")
-                        # print(forwarding_table)
+                        # Printing information
+                        printUpdates(topology, forwarding_table)
+                        
                         # Forwarding packets via reliable flooding
                         # forwardPacket(socket_object, full_packet, neighbors.keys().remove((src_ip_address, src_port)))
                 
@@ -143,11 +154,11 @@ while True:
                 else:
                     # Updating route topology
                     topology[(src_ip_address, src_port)] = eval(full_packet[26:].decode())
-                
                     # Updating the forwarding table
                     forwarding_table = buildForwardTable(((socket.gethostbyname(socket.gethostname()), port)), topology)
-                    # print("FORWARDING TABLE:")
-                    # print(forwarding_table)
+                    # Printing information
+                    printUpdates(topology, forwarding_table)
+                    
                     # Forwarding packets via reliable flooding
                     # forwardPacket(socket_object, full_packet, neighbors.keys().remove((src_ip_address, src_port)))
                 
@@ -189,18 +200,23 @@ while True:
         if (datetime.now().timestamp() - neighbors[neighbor]) * 1000 > HM_INTERVAL + 100:
             # Remove from topology
             if neighbor in topology[(socket.gethostbyname(socket.gethostname()), port)]:
+                # Updating route topology
                 topology[(socket.gethostbyname(socket.gethostname()), port)].remove(neighbor)
-                print("UPDATE IN TOPOLOGY:")
-                print(topology)
+                # Updating forwarding table
+                forwarding_table = buildForwardTable((socket.gethostbyname(socket.gethostname()), port), topology)
+                # Printing information
+                printUpdates(topology, forwarding_table)
+            
+            # Removing neighbors from the largest sequence number dictionary
+            if neighbor in largest_seq_no:
+                largest_seq_no.pop(neighbor)    
+            
             neighbors_rm.append(neighbor)
             seq_no += 1     # Indicates an update in LSP
     
-    # Rebuilding forwarding table
-    forwarding_table = buildForwardTable((socket.gethostbyname(socket.gethostname()), port), topology)
+    # Removing neighbors
     for neighbor in neighbors_rm:
         del neighbors[neighbor]
-        if neighbor in largest_seq_no:
-            largest_seq_no.pop(neighbor)
         
     # Sending new LinkStateMessage to all neighbors after certain interval
     if (datetime.now().timestamp() - last_LSM) * 1000 > LSP_INTERVAL:
